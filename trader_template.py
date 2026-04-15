@@ -29,6 +29,7 @@ from datamodel import (
 # TOMATOES_SYMBOL = "TOMATOES"
 
 # Round 1
+OSMIUM_SYMBOL = "OSMIUM"
 # ...
 
 # Round 2+
@@ -41,6 +42,7 @@ from datamodel import (
 POS_LIMITS: dict[str, int] = {
     # EMERALDS_SYMBOL: 80,
     # TOMATOES_SYMBOL: 80,
+    OSMIUM_SYMBOL: 80
 }
 
 CONVERSION_LIMIT = 10
@@ -277,11 +279,14 @@ class OsmiumTrader(ProductTrader):
 
             threshold = 2.0
 
+            # finds if price is significantly below the mean
             if mid_price < (mean_price - threshold):
-                self.bid(self.best_ask, self.max_buy_vol)
+                self.bid(self.best_bid + 1, self.max_buy_vol)
                 logger.print(f"Buy {self.symbol}: Price {mid_price} < Mean {mean_price} ")
-            elif mid_price > (mean_price - threshold):
-                self.bid(self.best_bid, self.max_sell_vol)
+                # changed the below code to a plus instead of minus
+                # it finds if price is significantly above the mean
+            elif mid_price > (mean_price + threshold):
+                self.ask(self.best_ask - 1, self.max_sell_vol)
                 logger.print(f"Sell {self.symbol}: Price {mid_price} > Mean {mean_price}")
 
             return {self.symbol: self.orders}
@@ -314,7 +319,7 @@ class Trader:
             if symbol not in state.order_depths:
                 continue
             try:
-                trader = TraderClass(state, new_mem)
+                trader = TraderClass(symbol, state, new_mem)
                 result.update(trader.get_orders())
                 conversions += trader.get_conversions()
             except Exception as exc:
