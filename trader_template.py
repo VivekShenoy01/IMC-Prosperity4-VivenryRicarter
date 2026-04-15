@@ -277,10 +277,10 @@ class OsmiumTrader(ProductTrader):
 
             threshold = 2.0
 
-            if mid_pirce < (mean_price - threshold):
+            if mid_price < (mean_price - threshold):
                 self.bid(self.best_ask, self.max_buy_vol)
                 logger.print(f"Buy {self.symbol}: Price {mid_price} < Mean {mean_price} ")
-            elif mid_price > (mean_price - theshold):
+            elif mid_price > (mean_price - threshold):
                 self.bid(self.best_bid, self.max_sell_vol)
                 logger.print(f"Sell {self.symbol}: Price {mid_price} > Mean {mean_price}")
 
