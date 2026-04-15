@@ -30,6 +30,7 @@ from datamodel import (
 
 # Round 1
 OSMIUM_SYMBOL = "OSMIUM"
+PEPPER_ROOT_SYMBOL = "PEPPER_ROOT"
 # ...
 
 # Round 2+
@@ -42,7 +43,8 @@ OSMIUM_SYMBOL = "OSMIUM"
 POS_LIMITS: dict[str, int] = {
     # EMERALDS_SYMBOL: 80,
     # TOMATOES_SYMBOL: 80,
-    OSMIUM_SYMBOL: 80
+    OSMIUM_SYMBOL: 80,
+    PEPPER_ROOT_SYMBOL: 80
 }
 
 CONVERSION_LIMIT = 10
@@ -290,6 +292,24 @@ class OsmiumTrader(ProductTrader):
                 logger.print(f"Sell {self.symbol}: Price {mid_price} > Mean {mean_price}")
 
             return {self.symbol: self.orders}
+        
+class PepperRootTrader(ProductTrader):
+        def __init__(self, state: TradingState, new_mem: dict) -> None:
+            super().__init__(OSMIUM_SYMBOL, state, new_mem)
+        
+        def get_orders(self) -> dict[Symbol, list[Order]]:
+
+            if self.best_bid is None or self.best_ask is None:
+                return {self.symbol: self.orders}
+            
+            if self.position < self.position_limit:
+                buy_price = self.best_bid + 1
+
+                self.bid(buy_price, self.max_buy_vol)
+                logger.print(f"Holding Trend: {self.position}/{self.position_limit} at {buy_price}")
+
+
+            return {self.symbol: self.orders}
 
 # ==============================================================================
 # PRODUCT REGISTRY  —  register active traders here
@@ -298,7 +318,8 @@ class OsmiumTrader(ProductTrader):
 PRODUCT_TRADERS: dict[str, type[ProductTrader]] = {
     # EMERALDS_SYMBOL: EmeraldsTrader,
     # TOMATOES_SYMBOL: TomatoesTrader,
-    OSMIUM_SYMBOL: OsmiumTrader
+    OSMIUM_SYMBOL: OsmiumTrader,
+    PEPPER_ROOT_SYMBOL: PepperRootTrader
 }
 
 
