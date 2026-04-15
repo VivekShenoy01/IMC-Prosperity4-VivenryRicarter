@@ -252,6 +252,39 @@ class ProductTrader:
 #     def get_conversions(self) -> int:
 #         return 0  # override if this product uses the foreign market
 
+# ==============================================================================
+
+class OsmiumTrader(ProductTrader):
+        def __init__(self, state: TradingState, new_mem: dict) -> None:
+            super().__init__(OSMIUM_SYMBOL, state, new_mem)
+        
+        def get_orders(self) -> dict[Symbol, list[Order]]:
+
+            if self.best_bid is None or self.best_ask is None:
+                return {self.symbol: self.orders}
+            
+            mid_price = (self.best_bid + self.best_ask) / 2
+
+            price_history = self.mem.get("History", [])
+            price_history.append(mid_price)
+
+            if len(price_history) > 20:
+                price_history.pop(0)
+
+            self.new_mem["History"] = price_history
+
+            mean_price = sum(price_history) / len(price_history)
+
+            threshold = 2.0
+
+            if mid_pirce < (mean_price - threshold):
+                self.bid(self.best_ask, self.max_buy_vol)
+                logger.print(f"Buy {self.symbol}: Price {mid_price} < Mean {mean_price} ")
+            elif mid_price > (mean_price - theshold):
+                self.bid(self.best_bid, self.max_sell_vol)
+                logger.print(f"Sell {self.symbol}: Price {mid_price} > Mean {mean_price}")
+
+            return {self.symbol: self.orders}
 
 # ==============================================================================
 # PRODUCT REGISTRY  —  register active traders here
@@ -260,6 +293,7 @@ class ProductTrader:
 PRODUCT_TRADERS: dict[str, type[ProductTrader]] = {
     # EMERALDS_SYMBOL: EmeraldsTrader,
     # TOMATOES_SYMBOL: TomatoesTrader,
+    OSMIUM_SYMBOL: OsmiumTrader
 }
 
 
@@ -290,3 +324,5 @@ class Trader:
         
         logger.flush(state, result, conversions, trader_data)
         return result, conversions, trader_data
+
+
