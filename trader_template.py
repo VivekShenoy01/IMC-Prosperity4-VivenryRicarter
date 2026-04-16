@@ -279,16 +279,16 @@ class OsmiumTrader(ProductTrader):
 
             mean_price = sum(price_history) / len(price_history)
 
-            threshold = 1.5
+            threshold = 0.5
 
             # finds if price is significantly below the mean
             if mid_price < (mean_price - threshold):
-                self.bid(self.best_bid + 1, self.max_buy_vol)
+                self.bid(self.best_bid, self.max_buy_vol)
                 logger.print(f"Buy {self.symbol}: Price {mid_price} < Mean {mean_price} ")
                 # changed the below code to a plus instead of minus
                 # it finds if price is significantly above the mean
             elif mid_price > (mean_price + threshold):
-                self.ask(self.best_ask - 1, self.max_sell_vol)
+                self.ask(self.best_ask, self.max_sell_vol)
                 logger.print(f"Sell {self.symbol}: Price {mid_price} > Mean {mean_price}")
 
             return {self.symbol: self.orders}
@@ -303,11 +303,11 @@ class PepperRootTrader(ProductTrader):
                 return {self.symbol: self.orders}
             
             if self.position < self.position_limit:
-                buy_price = self.best_bid + 1
+                buy_price = self.best_bid
                 self.bid(buy_price, self.max_buy_vol)
                 logger.print(f"Holding Trend: {self.position}/{self.position_limit} at {buy_price}")
             if self.position > -self.position_limit:
-                sell_price = self.best_ask - 1
+                sell_price = self.best_ask
                 self.ask(sell_price, self.max_sell_vol)
                 
 
@@ -335,8 +335,20 @@ class Trader:
         self, state: TradingState
     ) -> tuple[dict[Symbol, list[Order]], int, str]:
 
-        new_mem:    dict = {}
-        result:     dict[Symbol, list[Order]] = {}
+        # new_mem:    dict = {}
+        # result:     dict[Symbol, list[Order]] = {}
+        # conversions = 0
+
+        try:
+            if state.traderData:
+                new_mem = json.loads(state.traderData)
+            else:
+                new_mem = {}
+        except Exception as e:
+            logger.print(f"Error loading traderData: {e}")
+            new_mem = {}
+
+        result: dict[Symbol, list[Order]] = {}
         conversions = 0
 
         for symbol, TraderClass in PRODUCT_TRADERS.items():
