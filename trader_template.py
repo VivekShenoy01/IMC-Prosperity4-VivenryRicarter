@@ -235,6 +235,7 @@ class ProductTrader:
         return 0
 
 
+
 # ==============================================================================
 # PRODUCT TRADERS  —  implement one subclass per product here
 # ==============================================================================
@@ -259,7 +260,7 @@ class ProductTrader:
 # ==============================================================================
 
 class OsmiumTrader(ProductTrader):
-        def __init__(self, symbol: str, state: TradingState, new_mem: dict) -> None:
+        def __init__(self, state: TradingState, new_mem: dict) -> None:
             super().__init__(ASH_COATED_OSMIUM, state, new_mem)
         
         def get_orders(self) -> dict[Symbol, list[Order]]:
@@ -294,25 +295,19 @@ class OsmiumTrader(ProductTrader):
             return {self.symbol: self.orders}
         
 class PepperRootTrader(ProductTrader):
-        def __init__(self, symbol: str, state: TradingState, new_mem: dict) -> None:
-            super().__init__(INTARIAN_PEPPER_ROOT, state, new_mem)
-        
-        def get_orders(self) -> dict[Symbol, list[Order]]:
+    def __init__(self, state: TradingState, new_mem: dict) -> None:
+        super().__init__(INTARIAN_PEPPER_ROOT, state, new_mem)
 
-            if self.best_bid is None or self.best_ask is None:
-                return {self.symbol: self.orders}
-            
-            if self.position < self.position_limit:
-                buy_price = self.best_bid
-                self.bid(buy_price, self.max_buy_vol)
-                logger.print(f"Holding Trend: {self.position}/{self.position_limit} at {buy_price}")
-            if self.position > -self.position_limit:
-                sell_price = self.best_ask
-                self.ask(sell_price, self.max_sell_vol)
-                
-
-
+    def get_orders(self) -> dict[Symbol, list[Order]]:
+        if self.best_ask is None:
             return {self.symbol: self.orders}
+
+        # If we still have room to buy, keep buying
+        if self.max_buy_vol > 0:
+            self.bid(self.best_ask, self.max_buy_vol)
+            logger.print(f"Buy and Hold {self.symbol}: position={self.position}/{self.position_limit} at {self.best_ask}")
+
+        return {self.symbol: self.orders}
 
 # ==============================================================================
 # PRODUCT REGISTRY  —  register active traders here
