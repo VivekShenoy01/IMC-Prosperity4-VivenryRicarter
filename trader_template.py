@@ -302,7 +302,7 @@ class OsmiumTrader(ProductTrader):
 
             mean_price = sum(price_history) / len(price_history)
 
-            threshold = 0.5
+            threshold = .05
 
             # finds if price is significantly below the mean
             if mid_price < (mean_price - threshold):
