@@ -329,6 +329,32 @@ class PepperRootTrader(ProductTrader):
             self.bid(self.best_ask, self.max_buy_vol)
             logger.print(f"Buy and Hold {self.symbol}: position={self.position}/{self.position_limit} at {self.best_ask}")
 
+        mid_price = (self.best_bid + self.best_ask) / 2
+
+        price_history = self.mem.get("History", [])
+        price_history.append(mid_price)
+
+        if len(price_history) > 20:
+            price_history.pop(0)
+
+        self.new_mem["History"] = price_history
+
+        mean_price = sum(price_history) / len(price_history)
+        variance = sum((x - mean_price) ** 2 for x in price_history) / len(price_history)
+        std_dev = max(variance ** 1/2, 0.0001)
+        z_score = (mid_price - mean_price) / std_dev
+
+        current_pos = self.state.position.get(self.symbol, 0)
+
+        target_pos = int(max(min(-z_score * (self.position_limit / 3), self.position_limit), -self.position_limit))
+
+        pos_diff = target_pos - current_pos
+
+        if pos_diff < 0:
+            sell_price = self.best_ask - 1 if self.best_ask - 1 > self.best_bid else self.best_ask
+            self.ask(sell_price, abs(pos_diff))
+            logger.print(f"Scaling SELL: Z={z_score}, Target={target_pos}, Order={abs(pos_diff)}")
+
         return {self.symbol: self.orders}
 
 # ==============================================================================
