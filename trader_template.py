@@ -279,7 +279,7 @@ class OsmiumTrader(ProductTrader):
 
             mean_price = sum(price_history) / len(price_history)
 
-            threshold = 2.0
+            threshold = 1.5
 
             # finds if price is significantly below the mean
             if mid_price < (mean_price - threshold):
@@ -295,7 +295,7 @@ class OsmiumTrader(ProductTrader):
         
 class PepperRootTrader(ProductTrader):
         def __init__(self, state: TradingState, new_mem: dict) -> None:
-            super().__init__(OSMIUM_SYMBOL, state, new_mem)
+            super().__init__(PEPPER_ROOT_SYMBOL, state, new_mem)
         
         def get_orders(self) -> dict[Symbol, list[Order]]:
 
@@ -304,9 +304,12 @@ class PepperRootTrader(ProductTrader):
             
             if self.position < self.position_limit:
                 buy_price = self.best_bid + 1
-
                 self.bid(buy_price, self.max_buy_vol)
                 logger.print(f"Holding Trend: {self.position}/{self.position_limit} at {buy_price}")
+            if self.position > -self.position_limit:
+                sell_price = self.best_ask - 1
+                self.ask(sell_price, self.max_sell_vol)
+                
 
 
             return {self.symbol: self.orders}
