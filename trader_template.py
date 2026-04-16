@@ -29,8 +29,8 @@ from datamodel import (
 # TOMATOES_SYMBOL = "TOMATOES"
 
 # Round 1
-OSMIUM_SYMBOL = "OSMIUM"
-PEPPER_ROOT_SYMBOL = "PEPPER_ROOT"
+ASH_COATED_OSMIUM = "ASH_COATED_OSMIUM"
+INTARIAN_PEPPER_ROOT = "INTARIAN_PEPPER_ROOT"
 # ...
 
 # Round 2+
@@ -43,8 +43,8 @@ PEPPER_ROOT_SYMBOL = "PEPPER_ROOT"
 POS_LIMITS: dict[str, int] = {
     # EMERALDS_SYMBOL: 80,
     # TOMATOES_SYMBOL: 80,
-    OSMIUM_SYMBOL: 80,
-    PEPPER_ROOT_SYMBOL: 80
+    ASH_COATED_OSMIUM: 80,
+    INTARIAN_PEPPER_ROOT: 80
 }
 
 CONVERSION_LIMIT = 10
@@ -259,8 +259,8 @@ class ProductTrader:
 # ==============================================================================
 
 class OsmiumTrader(ProductTrader):
-        def __init__(self, state: TradingState, new_mem: dict) -> None:
-            super().__init__(OSMIUM_SYMBOL, state, new_mem)
+        def __init__(self, symbol: str, state: TradingState, new_mem: dict) -> None:
+            super().__init__(ASH_COATED_OSMIUM, state, new_mem)
         
         def get_orders(self) -> dict[Symbol, list[Order]]:
 
@@ -294,8 +294,8 @@ class OsmiumTrader(ProductTrader):
             return {self.symbol: self.orders}
         
 class PepperRootTrader(ProductTrader):
-        def __init__(self, state: TradingState, new_mem: dict) -> None:
-            super().__init__(PEPPER_ROOT_SYMBOL, state, new_mem)
+        def __init__(self, symbol: str, state: TradingState, new_mem: dict) -> None:
+            super().__init__(INTARIAN_PEPPER_ROOT, state, new_mem)
         
         def get_orders(self) -> dict[Symbol, list[Order]]:
 
@@ -321,8 +321,8 @@ class PepperRootTrader(ProductTrader):
 PRODUCT_TRADERS: dict[str, type[ProductTrader]] = {
     # EMERALDS_SYMBOL: EmeraldsTrader,
     # TOMATOES_SYMBOL: TomatoesTrader,
-    OSMIUM_SYMBOL: OsmiumTrader,
-    PEPPER_ROOT_SYMBOL: PepperRootTrader
+    ASH_COATED_OSMIUM: OsmiumTrader,
+    INTARIAN_PEPPER_ROOT: PepperRootTrader
 }
 
 
@@ -335,35 +335,20 @@ class Trader:
         self, state: TradingState
     ) -> tuple[dict[Symbol, list[Order]], int, str]:
 
-        # new_mem:    dict = {}
-        # result:     dict[Symbol, list[Order]] = {}
-        # conversions = 0
-
-        try:
-            if state.traderData:
-                new_mem = json.loads(state.traderData)
-            else:
-                new_mem = {}
-        except Exception as e:
-            logger.print(f"Error loading traderData: {e}")
-            new_mem = {}
-
-        result: dict[Symbol, list[Order]] = {}
-        conversions = 0
+        new_mem:     dict = {}
+        result:      dict[Symbol, list[Order]] = {}
+        conversions  = 0
 
         for symbol, TraderClass in PRODUCT_TRADERS.items():
             if symbol not in state.order_depths:
                 continue
             try:
-                trader = TraderClass(symbol, state, new_mem)
+                trader = TraderClass(state, new_mem)
                 result.update(trader.get_orders())
                 conversions += trader.get_conversions()
             except Exception as exc:
                 logger.print(f"ERROR [{symbol}]: {exc}")
 
         trader_data = json.dumps(new_mem)
-        
         logger.flush(state, result, conversions, trader_data)
         return result, conversions, trader_data
-
-
