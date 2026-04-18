@@ -374,6 +374,9 @@ PRODUCT_TRADERS: dict[str, type[ProductTrader]] = {
 # ==============================================================================
 
 class Trader:
+    def bid(self) -> int:
+        return 35;
+
     def run(
         self, state: TradingState
     ) -> tuple[dict[Symbol, list[Order]], int, str]:
