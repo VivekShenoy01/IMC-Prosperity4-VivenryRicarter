@@ -28,12 +28,19 @@ from datamodel import (
 # EMERALDS_SYMBOL = "EMERALDS"
 # TOMATOES_SYMBOL = "TOMATOES"
 
-# Round 1
-ASH_COATED_OSMIUM = "ASH_COATED_OSMIUM"
-INTARIAN_PEPPER_ROOT = "INTARIAN_PEPPER_ROOT"
-# ...
-
-# Round 2+
+# Round 3
+HYDROGEL_PACK = "HYDROGEL_PACK"
+VELVETFRUIT_EXTRACT = "VELVETFRUIT_EXTRACT"
+VEV_4000 = "VEV_4000"
+VEV_4500 = "VEV_4500"
+VEV_5000 = "VEV_5000"
+VEV_5100 = "VEV_5100"
+VEV_5200 = "VEV_5200"
+VEV_5300 = "VEV_5300"
+VEV_5400 = "VEV_5400"
+VEV_5500 = "VEV_5500"
+VEV_6000 = "VEV_6000"
+VEV_6500 = "VEV_6500"
 
 
 # ==============================================================================
@@ -43,8 +50,18 @@ INTARIAN_PEPPER_ROOT = "INTARIAN_PEPPER_ROOT"
 POS_LIMITS: dict[str, int] = {
     # EMERALDS_SYMBOL: 80,
     # TOMATOES_SYMBOL: 80,
-    ASH_COATED_OSMIUM: 80,
-    INTARIAN_PEPPER_ROOT: 80
+    HYDROGEL_PACK: 80,
+    VELVETFRUIT_EXTRACT: 80,
+    VEV_4000: 80,
+    VEV_4500: 80,
+    VEV_5000: 80,
+    VEV_5100: 80,
+    VEV_5200: 80,
+    VEV_5300: 80,
+    VEV_5400: 80,
+    VEV_5500: 80,
+    VEV_6000: 80,
+    VEV_6500: 80,
 }
 
 CONVERSION_LIMIT = 10
@@ -257,6 +274,17 @@ class ProductTrader:
         return 0
 
 
+def clamp(value: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, value))
+
+
+def get_mid_from_depth(state: TradingState, symbol: str) -> float | None:
+    depth = state.order_depths.get(symbol)
+    if depth is None or not depth.buy_orders or not depth.sell_orders:
+        return None
+    return (max(depth.buy_orders) + min(depth.sell_orders)) / 2
+
+
 
 # ==============================================================================
 # PRODUCT TRADERS  —  implement one subclass per product here
@@ -281,81 +309,192 @@ class ProductTrader:
 
 # ==============================================================================
 
-class OsmiumTrader(ProductTrader):
-        def __init__(self, state: TradingState, new_mem: dict) -> None:
-            super().__init__(ASH_COATED_OSMIUM, state, new_mem)
-        
-        def get_orders(self) -> dict[Symbol, list[Order]]:
-
-            if self.best_bid is None or self.best_ask is None:
-                return {self.symbol: self.orders}
-            
-            mid_price = (self.best_bid + self.best_ask) / 2
-
-            price_history = self.mem.get("History", [])
-            price_history.append(mid_price)
-
-            if len(price_history) > 20:
-                price_history.pop(0)
-
-            self.new_mem["History"] = price_history
-
-            mean_price = sum(price_history) / len(price_history)
-
-            threshold = .05
-
-            # finds if price is significantly below the mean
-            if mid_price < (mean_price - threshold):
-                self.bid(self.best_bid, self.max_buy_vol)
-                logger.print(f"Buy {self.symbol}: Price {mid_price} < Mean {mean_price} ")
-                # changed the below code to a plus instead of minus
-                # it finds if price is significantly above the mean
-            elif mid_price > (mean_price + threshold):
-                self.ask(self.best_ask, self.max_sell_vol)
-                logger.print(f"Sell {self.symbol}: Price {mid_price} > Mean {mean_price}")
-
-            return {self.symbol: self.orders}
-        
-class PepperRootTrader(ProductTrader):
+class HydrogelTrader(ProductTrader):
     def __init__(self, state: TradingState, new_mem: dict) -> None:
-        super().__init__(INTARIAN_PEPPER_ROOT, state, new_mem)
+        super().__init__(HYDROGEL_PACK, state, new_mem)
 
     def get_orders(self) -> dict[Symbol, list[Order]]:
-        if self.best_ask is None:
+        if self.best_bid is None or self.best_ask is None:
             return {self.symbol: self.orders}
 
-        # If we still have room to buy, keep buying
-        if self.max_buy_vol > 0:
-            self.bid(self.best_ask, self.max_buy_vol)
-            logger.print(f"Buy and Hold {self.symbol}: position={self.position}/{self.position_limit} at {self.best_ask}")
+        mid_price = (self.best_bid + self.best_ask) / 2
+        history = self.mem.get("history", [])
+        history.append(mid_price)
+
+        window = 30
+        if len(history) > window:
+            history.pop(0)
+        self.new_mem["history"] = history
+
+        if len(history) < 12:
+            return {self.symbol: self.orders}
+
+        mean_price = sum(history) / len(history)
+        fair_value = round(mean_price)
+        spread = self.best_ask - self.best_bid
+        inventory_ratio = self.position / max(self.position_limit, 1)
+
+        buy_quote = fair_value - 2
+        sell_quote = fair_value + 2
+
+        # Lean quotes away from current inventory so we naturally mean-revert.
+        if inventory_ratio > 0.25:
+            buy_quote -= 1
+            sell_quote -= 1
+        elif inventory_ratio < -0.25:
+            buy_quote += 1
+            sell_quote += 1
+
+        buy_quote = min(buy_quote, self.best_ask - 1)
+        buy_quote = max(buy_quote, self.best_bid)
+        sell_quote = max(sell_quote, self.best_bid + 1)
+        sell_quote = min(sell_quote, self.best_ask)
+
+        base_size = 12
+        buy_size = min(base_size, self.max_buy_vol)
+        sell_size = min(base_size, self.max_sell_vol)
+
+        # Quote both sides when possible.
+        if buy_quote < self.best_ask and buy_size > 0:
+            self.bid(buy_quote, buy_size)
+        if sell_quote > self.best_bid and sell_size > 0:
+            self.ask(sell_quote, sell_size)
+
+        # If the market is far from fair, take a little extra directional size.
+        if mid_price <= fair_value - 6 and self.max_buy_vol > 0:
+            self.bid(min(self.best_ask - 1, fair_value - 1), min(8, self.max_buy_vol))
+        elif mid_price >= fair_value + 6 and self.max_sell_vol > 0:
+            self.ask(max(self.best_bid + 1, fair_value + 1), min(8, self.max_sell_vol))
+
+        logger.print(
+            f"{self.symbol}: mid={mid_price:.1f} fair={fair_value} spread={spread} "
+            f"pos={self.position} buy_q={buy_quote} sell_q={sell_quote}"
+        )
+        return {self.symbol: self.orders}
+
+
+class VelvetExtractTrader(ProductTrader):
+    def __init__(self, state: TradingState, new_mem: dict) -> None:
+        super().__init__(VELVETFRUIT_EXTRACT, state, new_mem)
+
+    def get_orders(self) -> dict[Symbol, list[Order]]:
+        if self.best_bid is None or self.best_ask is None:
+            return {self.symbol: self.orders}
 
         mid_price = (self.best_bid + self.best_ask) / 2
+        history = self.mem.get("history", [])
+        history.append(mid_price)
 
-        price_history = self.mem.get("History", [])
-        price_history.append(mid_price)
+        window = 50
+        if len(history) > window:
+            history.pop(0)
+        self.new_mem["history"] = history
 
-        if len(price_history) > 20:
-            price_history.pop(0)
+        if len(history) < 20:
+            return {self.symbol: self.orders}
 
-        self.new_mem["History"] = price_history
-
-        mean_price = sum(price_history) / len(price_history)
-        variance = sum((x - mean_price) ** 2 for x in price_history) / len(price_history)
-        std_dev = max(variance ** 1/2, 0.0001)
+        mean_price = sum(history) / len(history)
+        variance = sum((price - mean_price) ** 2 for price in history) / len(history)
+        std_dev = max(variance ** 0.5, 0.01)
         z_score = (mid_price - mean_price) / std_dev
 
-        current_pos = self.state.position.get(self.symbol, 0)
+        short_window = min(10, len(history))
+        short_mean = sum(history[-short_window:]) / short_window
+        trend = short_mean - mean_price
+        last_move = history[-1] - history[-2]
 
-        target_pos = int(max(min(-z_score * (self.position_limit / 3), self.position_limit), -self.position_limit))
+        entry_z = 1.9
+        exit_z = 0.5
+        aggressiveness = 0.20
 
-        pos_diff = target_pos - current_pos
+        if z_score <= -entry_z and trend >= -0.3 and last_move >= 0:
+            target_pos = int(clamp(-z_score * aggressiveness, 0, 1) * self.position_limit)
+        elif z_score >= entry_z and trend <= 0.3 and last_move <= 0:
+            target_pos = -int(clamp(z_score * aggressiveness, 0, 1) * self.position_limit)
+        elif abs(z_score) <= exit_z:
+            target_pos = 0
+        else:
+            target_pos = int(self.position * 0.5)
 
-        if pos_diff < 0:
-            sell_price = self.best_ask - 1 if self.best_ask - 1 > self.best_bid else self.best_ask
-            self.ask(sell_price, abs(pos_diff))
-            logger.print(f"Scaling SELL: Z={z_score}, Target={target_pos}, Order={abs(pos_diff)}")
+        pos_diff = target_pos - self.position
+        if pos_diff > 0:
+            buy_price = self.best_bid + 1
+            buy_price = min(buy_price, self.best_ask - 1)
+            buy_price = max(buy_price, self.best_bid)
+            self.bid(buy_price, pos_diff)
+        elif pos_diff < 0:
+            sell_price = self.best_ask - 1
+            sell_price = max(sell_price, self.best_bid + 1)
+            sell_price = min(sell_price, self.best_ask)
+            self.ask(sell_price, -pos_diff)
 
+        logger.print(
+            f"{self.symbol}: mid={mid_price:.1f} mean={mean_price:.1f} short={short_mean:.1f} "
+            f"z={z_score:.2f} trend={trend:.2f} pos={self.position} target={target_pos}"
+        )
         return {self.symbol: self.orders}
+
+
+class VelvetVoucherTrader(ProductTrader):
+    def __init__(self, symbol: str, strike: int, state: TradingState, new_mem: dict) -> None:
+        super().__init__(symbol, state, new_mem)
+        self.strike = strike
+
+    def get_orders(self) -> dict[Symbol, list[Order]]:
+        # The simple historical-premium model overvalues decaying OTM vouchers
+        # on round 3 data, so keep vouchers disabled until we replace it.
+        logger.print(f"{self.symbol}: vouchers disabled")
+        return {self.symbol: self.orders}
+
+
+class VEV4000Trader(VelvetVoucherTrader):
+    def __init__(self, state: TradingState, new_mem: dict) -> None:
+        super().__init__(VEV_4000, 4000, state, new_mem)
+
+
+class VEV4500Trader(VelvetVoucherTrader):
+    def __init__(self, state: TradingState, new_mem: dict) -> None:
+        super().__init__(VEV_4500, 4500, state, new_mem)
+
+
+class VEV5000Trader(VelvetVoucherTrader):
+    def __init__(self, state: TradingState, new_mem: dict) -> None:
+        super().__init__(VEV_5000, 5000, state, new_mem)
+
+
+class VEV5100Trader(VelvetVoucherTrader):
+    def __init__(self, state: TradingState, new_mem: dict) -> None:
+        super().__init__(VEV_5100, 5100, state, new_mem)
+
+
+class VEV5200Trader(VelvetVoucherTrader):
+    def __init__(self, state: TradingState, new_mem: dict) -> None:
+        super().__init__(VEV_5200, 5200, state, new_mem)
+
+
+class VEV5300Trader(VelvetVoucherTrader):
+    def __init__(self, state: TradingState, new_mem: dict) -> None:
+        super().__init__(VEV_5300, 5300, state, new_mem)
+
+
+class VEV5400Trader(VelvetVoucherTrader):
+    def __init__(self, state: TradingState, new_mem: dict) -> None:
+        super().__init__(VEV_5400, 5400, state, new_mem)
+
+
+class VEV5500Trader(VelvetVoucherTrader):
+    def __init__(self, state: TradingState, new_mem: dict) -> None:
+        super().__init__(VEV_5500, 5500, state, new_mem)
+
+
+class VEV6000Trader(VelvetVoucherTrader):
+    def __init__(self, state: TradingState, new_mem: dict) -> None:
+        super().__init__(VEV_6000, 6000, state, new_mem)
+
+
+class VEV6500Trader(VelvetVoucherTrader):
+    def __init__(self, state: TradingState, new_mem: dict) -> None:
+        super().__init__(VEV_6500, 6500, state, new_mem)
 
 # ==============================================================================
 # PRODUCT REGISTRY  —  register active traders here
@@ -364,8 +503,18 @@ class PepperRootTrader(ProductTrader):
 PRODUCT_TRADERS: dict[str, type[ProductTrader]] = {
     # EMERALDS_SYMBOL: EmeraldsTrader,
     # TOMATOES_SYMBOL: TomatoesTrader,
-    ASH_COATED_OSMIUM: OsmiumTrader,
-    INTARIAN_PEPPER_ROOT: PepperRootTrader
+    HYDROGEL_PACK: HydrogelTrader,
+    VELVETFRUIT_EXTRACT: VelvetExtractTrader,
+    VEV_4000: VEV4000Trader,
+    VEV_4500: VEV4500Trader,
+    VEV_5000: VEV5000Trader,
+    VEV_5100: VEV5100Trader,
+    VEV_5200: VEV5200Trader,
+    VEV_5300: VEV5300Trader,
+    VEV_5400: VEV5400Trader,
+    VEV_5500: VEV5500Trader,
+    VEV_6000: VEV6000Trader,
+    VEV_6500: VEV6500Trader,
 }
 
 
@@ -374,9 +523,6 @@ PRODUCT_TRADERS: dict[str, type[ProductTrader]] = {
 # ==============================================================================
 
 class Trader:
-    def bid(self) -> int:
-        return 35;
-
     def run(
         self, state: TradingState
     ) -> tuple[dict[Symbol, list[Order]], int, str]:
